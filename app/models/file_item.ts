@@ -4,7 +4,7 @@ import { type FileType } from '../../shared/types/FileType.js'
 import User from './user.js'
 import ServerShard from './server_shard.js'
 
-/** NOTE: This is a DTO basically, as this  */
+/** NOTE: This is a DTO basically, as this si  */
 export default class FileItem {
   declare id: string
   /** Uuid generation */

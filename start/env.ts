@@ -19,7 +19,9 @@ export default await Env.create(new URL('../', import.meta.url), {
   LOG_LEVEL: Env.schema.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']),
 
   COORDINATOR_URL: Env.schema.string(),
+  COORDINATOR_UI: Env.schema.string(),
   COORDINATOR_API_KEY: Env.schema.string(),
   COORDINATOR_SERVER_ID: Env.schema.number(),
   SQLITE_LOC: Env.schema.string(),
+  SERVER_DIR: Env.schema.string(),
 })

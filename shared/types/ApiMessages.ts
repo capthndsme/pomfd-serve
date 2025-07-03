@@ -13,3 +13,4 @@ export type ValidApiMessages =
   | 'server-not-found'
   | 'server-unhealthy'
   | 'einval'
+  | 'no-file'

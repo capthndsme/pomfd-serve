@@ -1,28 +1,43 @@
-import UploadCoordinatorService from '#services/UploadCoordinatorService'
 import type { HttpContext } from '@adonisjs/core/http'
-import { createSuccess } from '../../shared/types/ApiBase.js'
+import { createFailure, createSuccess } from '../../shared/types/ApiBase.js'
+import UploadService from '#services/UploadService'
+import env from '#start/env'
+import UUIDService from '#services/UUIDService'
+import FileItem from '#models/file_item'
 
 export default class UploadsController {
-  async getAvailableServers({ response }: HttpContext) {
-    const servers = await UploadCoordinatorService.findAvailableServers()
-    return response.ok(createSuccess(servers, 'Servers found', 'success'))
-  }
+  async uploadFileAnonymous({ request, response }: HttpContext) {
+    const file = request.files('file')
 
-  async findAnonymousUrl({ response }: HttpContext) {
-    try {
-          const { uploadUrl } = await UploadCoordinatorService.getAnonymousUpload()
-    return response.ok(
-`Upload to URL: ${uploadUrl}
-Example: curl -F file=@{file} ${uploadUrl}`
-    ) 
-    } catch (e) {
-      return response.serviceUnavailable(
-        `There are no healthy servers available for upload.
-Please try again later.`
+    if (!file || file.length === 0) {
+      return response.badRequest(createFailure('No file provided', 'no-file'))
+    }
+    console.log(`received file?: ${file.length} files`)
+
+    const uploadedFile = await UploadService.uploadMultiFile(file)
+    // detect if we are CURL
+    if (request.header('User-Agent')?.includes('curl')) {
+      return response.ok(
+        `Success uploading.` +
+          uploadedFile.map((file, idx) => this.generateCurlText(file, idx)).join('')
       )
     }
 
+    return response.ok(
+      createSuccess(
+        uploadedFile,
+        'Success uploading',
+        'success'
+      )
+    )
   }
+  generateCurlText(file: FileItem, idx: number) {
+    return `
+=================
+File #${idx} (${file.originalFileName}) 
+Direct Link: https://${file.serverShard?.domain}/${file.fileKey}
+UI address: ${env.get('COORDINATOR_UI')}/s/${UUIDService.encode(file.id)}
 
-
+`
+  }
 }
