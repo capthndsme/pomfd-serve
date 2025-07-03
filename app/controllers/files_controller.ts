@@ -35,12 +35,34 @@ export default class FilesController {
     // Adding a path separator ensures a partial match like /base/dir-something won't pass for /base/dir.
     return resolvedPath.startsWith(resolvedAllowedDir + '/')
   }
+  /**
+   * Validates that a filename component contains only safe characters.
+   * Allows dots for file extensions but disallows path traversal characters.
+   * It also prevents filenames starting with a dot (like .htaccess or .DS_Store).
+   */
+  private isFilenameSafe(component: string): boolean {
+    if (!component || typeof component !== 'string') {
+      return false
+    }
+    // Disallow directory traversal attempts
+    if (component.includes('/') || component.includes('\\')) {
+      return false
+    }
+    // Disallow relative path components
+    if (component === '.' || component === '..') {
+      return false
+    }
+    // A simple regex to allow common filename characters, including dots.
+    // This ensures the filename doesn't start with a dot.
+    return /^[a-zA-Z0-9_-][a-zA-Z0-9_.-]*$/.test(component)
+  }
 
   async hotlinkGet({ params, response }: HttpContext) {
     const { key, file } = params
 
-    // 1. Validate input format
-    if (!this.isPathComponentSafe(key) || !this.isPathComponentSafe(file)) {
+    // 1. Validate input format using the correct validators
+    if (!this.isPathComponentSafe(key) || !this.isFilenameSafe(file)) {
+ 
       console.warn(
         `WARNING: Invalid characters in hotlink path components. Key: ${key}, File: ${file}`
       )
@@ -49,18 +71,14 @@ export default class FilesController {
 
     const requestedPath = join(this.#publicDir, key, file)
 
-    // 2. Final check to ensure the path is within the intended directory
+    // 2. Final check to ensure the path is within the intended directory (This is excellent, keep it)
     if (!this.isPathWithinDirectory(requestedPath, this.#publicDir)) {
       console.warn(`WARNING: Path resolution led outside public directory. Path: ${requestedPath}`)
       return response.badRequest(createFailure('Invalid file path', 'einval'))
     }
 
-    // AdonisJS's response.download will handle the file existence check and send a 404 if not found.
-    try {
-      response.download(requestedPath)
-    } catch (e) {
-      response.notFound(createFailure('File not found', 'not-found'))
-    }
+    // response.download handles 404s, so the try/catch is optional but fine.
+    return response.download(requestedPath)
   }
 
   async getPresigned({ params, response, request }: HttpContext) {
@@ -71,12 +89,11 @@ export default class FilesController {
     if (
       !signature ||
       !expires ||
-      !this.isPathComponentSafe(key) ||
-      !this.isPathComponentSafe(file)
+      !this.isPathComponentSafe(key) || // <-- Keep this for the key
+      !this.isFilenameSafe(file) // <-- Use the new validator for the file
     ) {
       return response.badRequest(createFailure('Invalid parameters', 'einval'))
     }
-
     const expiresNumber = Number(expires)
     if (isNaN(expiresNumber)) {
       return response.badRequest(createFailure('Invalid expiration timestamp', 'einval'))
