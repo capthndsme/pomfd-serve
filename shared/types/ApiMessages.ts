@@ -14,3 +14,4 @@ export type ValidApiMessages =
   | 'server-unhealthy'
   | 'einval'
   | 'no-file'
+  | 'eunauth'
