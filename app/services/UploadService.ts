@@ -26,7 +26,7 @@ class UploadService {
     parentDirectoryId: string | null = null
   ) {
     const clientFileName = basename(file.clientName ?? 'upload.bin')
-    const anonymousOrUserBucket = typeof belongsToUser === "string" ? "private" : "public"
+    const anonymousOrUserBucket = isPrivate ? "private" : "public"
     // random 36 char hex + time representation
     const baseKey = nanoid(18)
     const targetDir = join(this.#storageDir, anonymousOrUserBucket, baseKey)
