@@ -35,26 +35,64 @@ export default class FilesController {
     // Adding a path separator ensures a partial match like /base/dir-something won't pass for /base/dir.
     return resolvedPath.startsWith(resolvedAllowedDir + '/')
   }
+
   /**
    * Validates that a filename component contains only safe characters.
-   * Allows dots for file extensions but disallows path traversal characters.
-   * It also prevents filenames starting with a dot (like .htaccess or .DS_Store).
+   * Allows common filename characters while preventing directory traversal.
+   * Updated to handle real-world filenames with spaces, parentheses, etc.
    */
   private isFilenameSafe(component: string): boolean {
     if (!component || typeof component !== 'string') {
       return false
     }
+    
+    // Decode URL-encoded characters first
+    let decodedComponent: string
+    try {
+      decodedComponent = decodeURIComponent(component)
+    } catch (e) {
+      // If decoding fails, use original component
+      decodedComponent = component
+    }
+    
     // Disallow directory traversal attempts
-    if (component.includes('/') || component.includes('\\')) {
+    if (decodedComponent.includes('/') || decodedComponent.includes('\\')) {
       return false
     }
+    
     // Disallow relative path components
-    if (component === '.' || component === '..') {
+    if (decodedComponent === '.' || decodedComponent === '..') {
       return false
     }
-    // A simple regex to allow common filename characters, including dots.
-    // This ensures the filename doesn't start with a dot.
-    return /^[a-zA-Z0-9_-][a-zA-Z0-9_.-]*$/.test(component)
+    
+    // Disallow null bytes and other control characters
+    // Sonarlint, i wish there is a @sl-ignore like typescript here... its a valid use case? 
+    if (decodedComponent.includes('\0') || /[\x00-\x1f\x7f]/.test(decodedComponent)) {
+      return false
+    }
+    
+    // Allow common filename characters:
+    // - Letters, numbers, spaces
+    // - Common punctuation: . - _ ( ) [ ] { } 
+    // - Other safe chars: ~ ! @ # $ % ^ & + = , ;
+    // But still prevent problematic chars like: / \ : * ? " < > |
+    const allowedChars = /^[a-zA-Z0-9\s._\-()[\]{}~!@#$%^&+=,;]+$/
+    
+    if (!allowedChars.test(decodedComponent)) {
+      return false
+    }
+    
+    // Prevent filenames starting with a dot (hidden files)
+    if (decodedComponent.startsWith('.')) {
+      return false
+    }
+    
+    // Prevent extremely long filenames (filesystem limits)
+    if (decodedComponent.length > 255) {
+      return false
+    }
+    
+    return true
   }
 
   async hotlinkGet({ params, response }: HttpContext) {
@@ -62,22 +100,33 @@ export default class FilesController {
 
     // 1. Validate input format using the correct validators
     if (!this.isPathComponentSafe(key) || !this.isFilenameSafe(file)) {
- 
       console.warn(
         `WARNING: Invalid characters in hotlink path components. Key: ${key}, File: ${file}`
       )
       return response.badRequest(createFailure('Invalid file path', 'einval'))
     }
 
-    const requestedPath = join(this.#publicDir, key, file)
+    // Decode the filename for filesystem operations
+    let decodedFile: string
+    try {
+      decodedFile = decodeURIComponent(file)
+    } catch (e) {
+      decodedFile = file
+    }
 
-    // 2. Final check to ensure the path is within the intended directory (This is excellent, keep it)
+    const requestedPath = join(this.#publicDir, key, decodedFile)
+
+    // 2. Final check to ensure the path is within the intended directory
     if (!this.isPathWithinDirectory(requestedPath, this.#publicDir)) {
       console.warn(`WARNING: Path resolution led outside public directory. Path: ${requestedPath}`)
       return response.badRequest(createFailure('Invalid file path', 'einval'))
     }
 
-    // response.download handles 404s, so the try/catch is optional but fine.
+    // 3. Check if file exists before attempting to serve
+    if (!existsSync(requestedPath)) {
+      return response.notFound(createFailure('File not found', 'not-found'))
+    }
+
     return response.download(requestedPath)
   }
 
@@ -89,17 +138,26 @@ export default class FilesController {
     if (
       !signature ||
       !expires ||
-      !this.isPathComponentSafe(key) || // <-- Keep this for the key
-      !this.isFilenameSafe(file) // <-- Use the new validator for the file
+      !this.isPathComponentSafe(key) ||
+      !this.isFilenameSafe(file)
     ) {
       return response.badRequest(createFailure('Invalid parameters', 'einval'))
     }
+    
     const expiresNumber = Number(expires)
     if (isNaN(expiresNumber)) {
       return response.badRequest(createFailure('Invalid expiration timestamp', 'einval'))
     }
 
-    const relativeFilePath = `${key}/${file}`
+    // Decode the filename for filesystem operations
+    let decodedFile: string
+    try {
+      decodedFile = decodeURIComponent(file)
+    } catch (e) {
+      decodedFile = file
+    }
+
+    const relativeFilePath = `${key}/${decodedFile}`
 
     // 2. Verify the presigned URL signature FIRST.
     const isValid = fileService.verifyPresignedUrl(signature, expiresNumber, relativeFilePath)
