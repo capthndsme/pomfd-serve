@@ -24,4 +24,7 @@ export default await Env.create(new URL('../', import.meta.url), {
   COORDINATOR_SERVER_ID: Env.schema.number(),
   SQLITE_LOC: Env.schema.string(),
   SERVER_DIR: Env.schema.string(),
+  // Monitor interface optional
+  MONITOR_INTERFACE: Env.schema.string.optional(),
+  
 })
