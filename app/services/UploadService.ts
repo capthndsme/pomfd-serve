@@ -77,6 +77,7 @@ class UploadService {
     chunk: MultipartFile,
     meta: ChunkedMeta
   ) {
+    const start = performance.now()
     const { uploadId, chunkIndex, totalChunks, fileSize } = meta
 
     // uploadId should only ever be alphanumeric
@@ -111,6 +112,8 @@ class UploadService {
       name: `${chunkIndex}.chunk`,
       overwrite: true,
     })
+    const end = performance.now()
+    console.log(`Chunk took ${end - start}ms`)
  
     return createSuccess(null, 'chunk ok', 'chunk-finish')
   }
