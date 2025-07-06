@@ -18,7 +18,6 @@ export default class UploadsController {
       validate = await request.validateUsing(chunkedMetaValidator)
 
       if (validate) {
- 
         // also validate that we should have exactly
         // ONE file.
         if (file.length !== 1) {
@@ -37,16 +36,16 @@ export default class UploadsController {
     if (!file || file.length === 0) {
       return response.badRequest(createFailure('No file provided', 'no-file'))
     }
- 
 
     const uploadedFile = await UploadService.uploadMultiFile(file, null, false, null, validate)
     // detect if we are CURL
-    if (request.header('User-Agent')?.includes('curl')) {
+    if (request.header('User-Agent')?.includes('curl') && typeof uploadedFile !== 'string') {
       return response.ok(
         `Success uploading.` +
           uploadedFile.map((file, idx) => this.generateCurlText(file, idx)).join('')
       )
     }
+    if (uploadedFile === 'chunk-finish') return createSuccess(null, 'chunk-finish', 'chunk-finish')
 
     return response.ok(createSuccess(uploadedFile, 'Success uploading', 'success'))
   }
@@ -74,7 +73,6 @@ UI address: ${env.get('COORDINATOR_UI')}/s/${UUIDService.encode(file.id)}
       validate = await request.validateUsing(chunkedMetaValidator)
 
       if (validate) {
- 
         // also validate that we should have exactly
         // ONE file.
         if (file.length !== 1) {
@@ -103,6 +101,8 @@ UI address: ${env.get('COORDINATOR_UI')}/s/${UUIDService.encode(file.id)}
       parentDirectoryId,
       validate
     )
+
+    if (uploadedFiles === 'chunk-finish') return createSuccess(null, 'chunk-finish', 'chunk-finish')
 
     return response.ok(createSuccess(uploadedFiles, 'Success uploading', 'success'))
   }

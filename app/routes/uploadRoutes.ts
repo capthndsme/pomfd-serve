@@ -9,8 +9,6 @@ function uploadRoutes(router: HttpRouterService) {
   router.post('/anon-upload/chunked/finish', [UploadsController, 'finishChunkedUploadAnonymous'])
 
   // protected upload 
-
- 
     router.post('/upload', [UploadsController, 'uploadFileUserBound'])
     .middleware(middleware.mainServerAuth())
 

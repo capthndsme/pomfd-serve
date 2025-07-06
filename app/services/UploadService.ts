@@ -64,7 +64,7 @@ class UploadService {
       return await MainServerAxiosService.post<ApiBase<FileItem>>('/coordinator/v1/ack', object)
     } catch (e) {
       // delete the file
-      console.error("Coordinator down failed with", e)
+      console.error('Coordinator down failed with', e)
       await rm(`${targetDir}/${clientFileName}`)
       console.error('Coordinator Down! Deleted file (retry mechanism soon!)')
       throw new NamedError('Coordinator Down!', 'error')
@@ -77,7 +77,7 @@ class UploadService {
     chunk: MultipartFile,
     meta: ChunkedMeta
   ) {
-    const start = performance.now()
+
     const { uploadId, chunkIndex, totalChunks, fileSize } = meta
 
     // uploadId should only ever be alphanumeric
@@ -99,6 +99,7 @@ class UploadService {
     if (chunk.size !== meta.chunkSize) {
       throw new NamedError('Chunk size mismatch', 'einval')
     }
+ 
     // async hashing for verification
 
     const bucketBase = '_chunks_'
@@ -112,9 +113,8 @@ class UploadService {
       name: `${chunkIndex}.chunk`,
       overwrite: true,
     })
-    const end = performance.now()
-    console.log(`Chunk took ${end - start}ms`)
  
+
     return createSuccess(null, 'chunk ok', 'chunk-finish')
   }
 
@@ -170,7 +170,7 @@ class UploadService {
         object
       )
       if ('data' in result.data) {
-        return result.data.data
+        return [result.data.data]
       } else throw new Error('Coordinator Down!')
     } catch (e) {
       await rm(filePath, { force: true }).catch(() => {})
@@ -186,16 +186,15 @@ class UploadService {
     parentDirectoryId: string | null = null,
     chunkedMeta: ChunkedMeta | null = null
   ) {
-    const res =
-      chunkedMeta?.uploadId
-        ? await this.chunkedUploadBase(file, chunkedMeta)
-        : await this.uploadFileBase(file, belongsToUser, isPrivate, parentDirectoryId)
+    const res = chunkedMeta?.uploadId
+      ? await this.chunkedUploadBase(file, chunkedMeta)
+      : await this.uploadFileBase(file, belongsToUser, isPrivate, parentDirectoryId)
     if (res.status === 200 && 'data' in res.data) {
       return res.data.data
     } else if (res.status === 'chunk-finish') {
       return res
     } else {
-      console.error("coordinator down failed with", res)
+      console.error('coordinator down failed with', res)
       throw new NamedError('Coordinator Down!', 'error')
     }
   }
@@ -218,6 +217,7 @@ class UploadService {
       )
       uploadedFile && !('data' in uploadedFile) && uploadedFiles.push(uploadedFile)
     }
+    if (chunkedMeta) return  'chunk-finish'
     return uploadedFiles
   }
 }
