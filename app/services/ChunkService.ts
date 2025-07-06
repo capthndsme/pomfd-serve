@@ -15,6 +15,7 @@ class ChunkService {
     isPrivate: boolean,
     baseKey: string
   ) {
+    const start = performance.now()
     const chunkDir = join(this.#storageDir, '_chunks_', uploadId)
     const clientFileName = basename(fileName ?? 'upload.bin')
 
@@ -60,7 +61,7 @@ class ChunkService {
 
       // Clean up chunks after successful combination
       await rm(chunkDir, { recursive: true, force: true })
-
+      console.log(`Chunk recombine took ${(performance.now() - start).toFixed(2)}ms`)
       return {
         filePath: finalFilePath,
         fileKey: `${baseKey}/${clientFileName}`,
