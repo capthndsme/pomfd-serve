@@ -55,11 +55,13 @@
     "@adonisjs/core": "^6.18.0",
     "@adonisjs/cors": "^2.2.1",
     "@adonisjs/lucid": "^21.6.1",
+    "@types/mime-types": "^3.0.1",
     "@vinejs/vine": "^3.0.1",
     "axios": "^1.10.0",
     "better-sqlite3": "^12.2.0",
     "diskusage": "^1.2.0",
     "luxon": "^3.6.1",
+    "mime-types": "^3.0.1",
     "nanoid": "^5.1.5",
     "reflect-metadata": "^0.2.2"
   },

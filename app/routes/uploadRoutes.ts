@@ -6,6 +6,7 @@ const UploadsController = () => import('#controllers/uploads_controller')
 function uploadRoutes(router: HttpRouterService) {
   // Anonymous upload
   router.post('/anon-upload', [UploadsController, 'uploadFileAnonymous'])
+  //router.post('/anon-upload', ()))
   router.post('/anon-upload/chunked/finish', [UploadsController, 'finishChunkedUploadAnonymous'])
 
   // protected upload 

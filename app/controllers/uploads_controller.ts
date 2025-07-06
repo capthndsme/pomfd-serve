@@ -9,13 +9,16 @@ import { chunkedFinishValidator } from '#validators/chunked_finish_validator'
 import { ChunkedMeta } from '../../shared/types/request/ChunkedMeta.js'
 
 export default class UploadsController {
+ 
   async uploadFileAnonymous({ request, response }: HttpContext) {
-    const file = request.files('file')
+ 
 
+    const file = request.files('file')
+ 
     let validate: ChunkedMeta | null = null
     // validate from qs
     try {
-      validate = await request.validateUsing(chunkedMetaValidator)
+      validate = await chunkedMetaValidator.validate(request.qs())
 
       if (validate) {
         // also validate that we should have exactly
@@ -37,7 +40,11 @@ export default class UploadsController {
       return response.badRequest(createFailure('No file provided', 'no-file'))
     }
 
+ 
+
     const uploadedFile = await UploadService.uploadMultiFile(file, null, false, null, validate)
+ 
+
     // detect if we are CURL
     if (request.header('User-Agent')?.includes('curl') && typeof uploadedFile !== 'string') {
       return response.ok(
@@ -70,7 +77,7 @@ UI address: ${env.get('COORDINATOR_UI')}/s/${UUIDService.encode(file.id)}
     let validate: ChunkedMeta | null = null
     // validate from qs
     try {
-      validate = await request.validateUsing(chunkedMetaValidator)
+      validate = await chunkedMetaValidator.validate(request.qs())
 
       if (validate) {
         // also validate that we should have exactly
@@ -138,8 +145,8 @@ UI address: ${env.get('COORDINATOR_UI')}/s/${UUIDService.encode(file.id)}
       fileName,
       fileSize,
       mimeType,
-      belongsToUser: null,
-      isPrivate: false,
+      belongsToUser: null, // force null EVER 
+      isPrivate: false, // force not private
       parentDirectoryId: null,
     })
 
