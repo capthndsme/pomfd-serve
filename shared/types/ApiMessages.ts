@@ -15,3 +15,5 @@ export type ValidApiMessages =
   | 'einval'
   | 'no-file'
   | 'eunauth'
+  | 'chunk-finish'
+  | 'chunk-error'

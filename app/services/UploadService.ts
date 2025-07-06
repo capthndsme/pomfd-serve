@@ -8,7 +8,7 @@ import env from '#start/env'
 import { nanoid } from 'nanoid'
 import { basename, join } from 'path'
 import { mkdir, rm } from 'fs/promises'
-import { ApiBase } from '../../shared/types/ApiBase.js'
+import { ApiBase, createSuccess } from '../../shared/types/ApiBase.js'
 import { ChunkedMeta } from '../../shared/types/request/ChunkedMeta.js'
 import ChunkService from './ChunkService.js'
 class UploadService {
@@ -28,7 +28,7 @@ class UploadService {
     parentDirectoryId: string | null = null
   ) {
     const clientFileName = basename(file.clientName ?? 'upload.bin')
-    const anonymousOrUserBucket = isPrivate ? "private" : "public"
+    const anonymousOrUserBucket = isPrivate ? 'private' : 'public'
     // random 36 char hex + time representation
     const baseKey = nanoid(18)
     const targetDir = join(this.#storageDir, anonymousOrUserBucket, baseKey)
@@ -63,17 +63,15 @@ class UploadService {
       return await MainServerAxiosService.post<ApiBase<FileItem>>('/coordinator/v1/ack', object)
     } catch (e) {
       // delete the file
-      await rm(
-        `${targetDir}/${clientFileName}`
-      )
-      console.error("Coordinator Down! Deleted file (retry mechanism soon!)")
+      console.error("Coordinator down failed with", e)
+      await rm(`${targetDir}/${clientFileName}`)
+      console.error('Coordinator Down! Deleted file (retry mechanism soon!)')
       throw new NamedError('Coordinator Down!', 'error')
     }
   }
 
-
   async chunkedUploadBase(
-    // We cant rely on the MultipartFile info now, so we shall send 
+    // We cant rely on the MultipartFile info now, so we shall send
     // it on the Frontend
     chunk: MultipartFile,
     meta: ChunkedMeta,
@@ -81,38 +79,36 @@ class UploadService {
     isPrivate: boolean = false,
     parentDirectoryId: string | null = null
   ) {
-    const { uploadId, chunkIndex, totalChunks, fileName, fileSize, mimeType } = meta;
+    const { uploadId, chunkIndex, totalChunks, fileName, fileSize, mimeType } = meta
 
     // uploadId should only ever be alphanumeric
     if (!/^[a-zA-Z0-9_-]+$/.test(uploadId)) {
-      throw new NamedError('Invalid uploadId', 'einval');
+      throw new NamedError('Invalid uploadId', 'einval')
     }
 
     if (chunkIndex < 0 || chunkIndex >= totalChunks) {
-      throw new NamedError('Invalid chunk index', 'einval');
+      throw new NamedError('Invalid chunk index', 'einval')
     }
     if (fileSize <= 0) {
-      throw new NamedError('Invalid file size', 'einval');
+      throw new NamedError('Invalid file size', 'einval')
     }
-
 
     /** validations for chunk */
     if (!chunk) {
-      throw new NamedError('No chunk provided', 'no-file');
+      throw new NamedError('No chunk provided', 'no-file')
     }
     if (chunk.size !== meta.chunkSize) {
-      throw new NamedError('Chunk size mismatch', 'einval');
+      throw new NamedError('Chunk size mismatch', 'einval')
     }
-    // async hashing (todo)
+    // async hashing for verification
 
-    const clientFileName = basename(fileName ?? 'upload.bin')
-    const bucketBase = "_chunks_"
+    const bucketBase = '_chunks_'
 
     const targetDir = join(this.#storageDir, bucketBase, uploadId)
 
     await mkdir(targetDir, { recursive: true })
 
-    // write clientfilename 
+    // write clientfilename
     await chunk.move(targetDir, {
       name: `${chunkIndex}.chunk`,
       overwrite: true,
@@ -120,27 +116,79 @@ class UploadService {
     console.log(`wrote chunk ${chunkIndex} for uploadId ${uploadId} in ${targetDir}`)
 
     // check if we are finished
-
-   
     const isActualFinish = await ChunkService.isActualEnd(uploadId, totalChunks)
     if (isActualFinish) {
-      
+      const baseKey = nanoid(18)
+      const { filePath, fileKey } = await ChunkService.combineChunks(
+        uploadId,
+        fileName,
+        totalChunks,
+        fileSize,
+        isPrivate,
+        baseKey
+      )
+
+      const object: Partial<FileItem> = {
+        originalFileName: fileName,
+        name: fileName,
+        ownerId: belongsToUser ?? undefined,
+        isPrivate: isPrivate ?? false,
+        isFolder: false,
+        parentFolder: parentDirectoryId,
+        mimeType: mimeType,
+        fileSize: fileSize,
+        fileKey: fileKey,
+        fileType: FileTypeExtractionService.detectFileType({
+          mimeType: mimeType,
+          fileName: fileName,
+        }),
+      }
+
+      try {
+        const result = await MainServerAxiosService.post<ApiBase<FileItem>>(
+          '/coordinator/v1/ack',
+          object
+        )
+        if ('data' in result.data) {
+          return result
+        } else throw new Error('Coordinator Down!')
+      } catch (e) {
+        await rm(filePath, { force: true }).catch(() => { })
+        console.error('Coordinator Down! Deleted file (retry mechanism soon!)')
+        throw new NamedError('Coordinator Down!', 'error')
+      }
     } else {
-      return "ok"
+      return createSuccess(
+        null,
+        'chunk ok',
+        'chunk-finish'
+      );
     }
   }
 
- 
   async uploadFile(
     file: MultipartFile,
     belongsToUser: string | null = null,
     isPrivate: boolean = false,
-    parentDirectoryId: string | null = null
+    parentDirectoryId: string | null = null,
+    chunkedMeta: ChunkedMeta | null = null
   ) {
-    const res = await this.uploadFileBase(file, belongsToUser, isPrivate, parentDirectoryId)
+    const res =
+      chunkedMeta?.uploadId
+        ? await this.chunkedUploadBase(
+          file,
+          chunkedMeta,
+          belongsToUser,
+          isPrivate,
+          parentDirectoryId
+        )
+        : await this.uploadFileBase(file, belongsToUser, isPrivate, parentDirectoryId)
     if (res.status === 200 && 'data' in res.data) {
       return res.data.data
+    } else if (res.status === 'chunk-finish' && 'data') {
+      return res
     } else {
+      console.error("coordinator down failed with", res)
       throw new NamedError('Coordinator Down!', 'error')
     }
   }
@@ -149,15 +197,21 @@ class UploadService {
     files: MultipartFile[],
     belongsToUser: string | null = null,
     isPrivate: boolean = false,
-    parentDirectoryId: string | null = null
+    parentDirectoryId: string | null = null,
+    chunkedMeta: ChunkedMeta | null = null
   ) {
     const uploadedFiles: FileItem[] = []
     for (const file of files) {
-      const uploadedFile = await this.uploadFile(file, belongsToUser, isPrivate, parentDirectoryId)
-      uploadedFiles.push(uploadedFile)
+      const uploadedFile = await this.uploadFile(
+        file,
+        belongsToUser,
+        isPrivate,
+        parentDirectoryId,
+        chunkedMeta
+      )
+      uploadedFile && !('data' in uploadedFile) && uploadedFiles.push(uploadedFile)
     }
     return uploadedFiles
-
   }
 }
 
