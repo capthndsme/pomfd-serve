@@ -38,20 +38,37 @@ class ChunkService {
     const writeStream = createWriteStream(finalFilePath)
 
     try {
-      for (const chunkInfo of chunkFiles) {
-        await new Promise<void>((resolve, reject) => {
-          const readStream = createReadStream(chunkInfo.path)
-          readStream.on('error', reject)
-          readStream.on('end', resolve)
-          readStream.pipe(writeStream, { end: false })
-        })
-      }
-
-      writeStream.end()
-
       await new Promise<void>((resolve, reject) => {
         writeStream.on('finish', resolve)
-        writeStream.on('error', reject)
+        writeStream.on('error', (err) => {
+          // Ensure cleanup happens before rejecting
+          writeStream.destroy()
+          rm(finalFilePath, { force: true }).catch(() => {}) // Ignore cleanup errors
+          reject(err)
+        })
+
+        const pipeNextChunk = (index: number) => {
+          if (index >= chunkFiles.length) {
+            writeStream.end()
+            return
+          }
+
+          const chunkPath = chunkFiles[index].path
+          const readStream = createReadStream(chunkPath)
+
+          readStream.on('error', (err) => {
+            readStream.destroy()
+            writeStream.emit('error', err) // Propagate error to the write stream
+          })
+
+          readStream.on('end', () => {
+            pipeNextChunk(index + 1)
+          })
+
+          readStream.pipe(writeStream, { end: false })
+        }
+
+        pipeNextChunk(0)
       })
 
       const stats = await import('fs/promises').then((fs) => fs.stat(finalFilePath))
@@ -67,9 +84,9 @@ class ChunkService {
         fileKey: `${baseKey}/${clientFileName}`,
       }
     } catch (error) {
-      // Clean up on error
-      writeStream.destroy()
-      await rm(finalFilePath, { force: true }).catch(() => {}) // Ignore errors during cleanup
+      // The promise-based piping now handles its own cleanup on error.
+      // We just need to re-throw the error.
+      // The initial writeStream.destroy() and rm() in the old catch block are now inside the promise reject handler.
       throw error
     }
   }
