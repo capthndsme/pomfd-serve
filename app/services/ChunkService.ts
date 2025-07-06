@@ -99,19 +99,11 @@ class ChunkService {
       return false
     }
 
-    // Verify all expected chunk indices are present
+    // Verify all expected chunk indices are present.
+    // This relies on the caller (e.g., UploadService) to validate that chunkIndex
+    // is within the range [0, totalChunks - 1].
     const presentIndices = new Set(chunkFiles.map((file) => parseInt(file, 10)))
-    if (presentIndices.size !== totalChunks) {
-      return false
-    }
-
-    for (let i = 0; i < totalChunks; i++) {
-      if (!presentIndices.has(i)) {
-        return false
-      }
-    }
-
-    return true
+    return presentIndices.size === totalChunks
   }
 
   async getChunkInfoByUploadId(uploadId: string) {

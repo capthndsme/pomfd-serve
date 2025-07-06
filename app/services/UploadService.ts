@@ -11,6 +11,7 @@ import { mkdir, rm } from 'fs/promises'
 import { ApiBase, createSuccess } from '../../shared/types/ApiBase.js'
 import { ChunkedMeta } from '../../shared/types/request/ChunkedMeta.js'
 import ChunkService from './ChunkService.js'
+
 class UploadService {
   readonly #storageDir = env.get('SERVER_DIR')
   async uploadFinish(file: FileItem) {
@@ -74,12 +75,9 @@ class UploadService {
     // We cant rely on the MultipartFile info now, so we shall send
     // it on the Frontend
     chunk: MultipartFile,
-    meta: ChunkedMeta,
-    belongsToUser: string | null = null,
-    isPrivate: boolean = false,
-    parentDirectoryId: string | null = null
+    meta: ChunkedMeta
   ) {
-    const { uploadId, chunkIndex, totalChunks, fileName, fileSize, mimeType } = meta
+    const { uploadId, chunkIndex, totalChunks, fileSize } = meta
 
     // uploadId should only ever be alphanumeric
     if (!/^[a-zA-Z0-9_-]+$/.test(uploadId)) {
@@ -113,56 +111,68 @@ class UploadService {
       name: `${chunkIndex}.chunk`,
       overwrite: true,
     })
-    console.log(`wrote chunk ${chunkIndex} for uploadId ${uploadId} in ${targetDir}`)
+ 
+    return createSuccess(null, 'chunk ok', 'chunk-finish')
+  }
 
-    // check if we are finished
-    const isActualFinish = await ChunkService.isActualEnd(uploadId, totalChunks)
-    if (isActualFinish) {
-      const baseKey = nanoid(18)
-      const { filePath, fileKey } = await ChunkService.combineChunks(
-        uploadId,
-        fileName,
-        totalChunks,
-        fileSize,
-        isPrivate,
-        baseKey
-      )
+  async finishChunkedUpload(data: {
+    uploadId: string
+    totalChunks: number
+    fileName: string
+    fileSize: number
+    mimeType: string
+    belongsToUser: string | null
+    isPrivate: boolean
+    parentDirectoryId: string | null
+  }) {
+    const {
+      uploadId,
+      totalChunks,
+      fileName,
+      fileSize,
+      mimeType,
+      belongsToUser,
+      isPrivate,
+      parentDirectoryId,
+    } = data
+    const baseKey = nanoid(18)
+    const { filePath, fileKey } = await ChunkService.combineChunks(
+      uploadId,
+      fileName,
+      totalChunks,
+      fileSize,
+      isPrivate,
+      baseKey
+    )
 
-      const object: Partial<FileItem> = {
-        originalFileName: fileName,
-        name: fileName,
-        ownerId: belongsToUser ?? undefined,
-        isPrivate: isPrivate ?? false,
-        isFolder: false,
-        parentFolder: parentDirectoryId,
+    const object: Partial<FileItem> = {
+      originalFileName: fileName,
+      name: fileName,
+      ownerId: belongsToUser ?? undefined,
+      isPrivate: isPrivate ?? false,
+      isFolder: false,
+      parentFolder: parentDirectoryId,
+      mimeType: mimeType,
+      fileSize: fileSize,
+      fileKey: fileKey,
+      fileType: FileTypeExtractionService.detectFileType({
         mimeType: mimeType,
-        fileSize: fileSize,
-        fileKey: fileKey,
-        fileType: FileTypeExtractionService.detectFileType({
-          mimeType: mimeType,
-          fileName: fileName,
-        }),
-      }
+        fileName: fileName,
+      }),
+    }
 
-      try {
-        const result = await MainServerAxiosService.post<ApiBase<FileItem>>(
-          '/coordinator/v1/ack',
-          object
-        )
-        if ('data' in result.data) {
-          return result
-        } else throw new Error('Coordinator Down!')
-      } catch (e) {
-        await rm(filePath, { force: true }).catch(() => { })
-        console.error('Coordinator Down! Deleted file (retry mechanism soon!)')
-        throw new NamedError('Coordinator Down!', 'error')
-      }
-    } else {
-      return createSuccess(
-        null,
-        'chunk ok',
-        'chunk-finish'
-      );
+    try {
+      const result = await MainServerAxiosService.post<ApiBase<FileItem>>(
+        '/coordinator/v1/ack',
+        object
+      )
+      if ('data' in result.data) {
+        return result.data.data
+      } else throw new Error('Coordinator Down!')
+    } catch (e) {
+      await rm(filePath, { force: true }).catch(() => {})
+      console.error('Coordinator Down! Deleted file (retry mechanism soon!)')
+      throw new NamedError('Coordinator Down!', 'error')
     }
   }
 
@@ -175,17 +185,11 @@ class UploadService {
   ) {
     const res =
       chunkedMeta?.uploadId
-        ? await this.chunkedUploadBase(
-          file,
-          chunkedMeta,
-          belongsToUser,
-          isPrivate,
-          parentDirectoryId
-        )
+        ? await this.chunkedUploadBase(file, chunkedMeta)
         : await this.uploadFileBase(file, belongsToUser, isPrivate, parentDirectoryId)
     if (res.status === 200 && 'data' in res.data) {
       return res.data.data
-    } else if (res.status === 'chunk-finish' && 'data') {
+    } else if (res.status === 'chunk-finish') {
       return res
     } else {
       console.error("coordinator down failed with", res)

@@ -5,39 +5,39 @@ import env from '#start/env'
 import UUIDService from '#services/UUIDService'
 import FileItem from '#models/file_item'
 import { chunkedMetaValidator } from '#validators/chunked_meta_validator'
+import { chunkedFinishValidator } from '#validators/chunked_finish_validator'
 import { ChunkedMeta } from '../../shared/types/request/ChunkedMeta.js'
 
 export default class UploadsController {
   async uploadFileAnonymous({ request, response }: HttpContext) {
     const file = request.files('file')
-    
- 
- 
-    let validate: ChunkedMeta | null = null;
+
+    let validate: ChunkedMeta | null = null
     // validate from qs
     try {
       validate = await request.validateUsing(chunkedMetaValidator)
 
       if (validate) {
-        console.log(`Request is a chunked upload.`)
-        // also validate that we should have exactly 
+ 
+        // also validate that we should have exactly
         // ONE file.
         if (file.length !== 1) {
-          return response.badRequest(createFailure('Chunked uploads must send one file at a time. You sent nothing or more than one file.', 'einval'))
+          return response.badRequest(
+            createFailure(
+              'Chunked uploads must send one file at a time. You sent nothing or more than one file.',
+              'einval'
+            )
+          )
         }
       }
-      
     } catch (e) {
       console.log(`Request is not a chunked upload or a malformed one.`)
     }
- 
-
-    
 
     if (!file || file.length === 0) {
       return response.badRequest(createFailure('No file provided', 'no-file'))
     }
-    console.log(`received file?: ${file.length} files`)
+ 
 
     const uploadedFile = await UploadService.uploadMultiFile(file, null, false, null, validate)
     // detect if we are CURL
@@ -53,7 +53,7 @@ export default class UploadsController {
   generateCurlText(file: FileItem, idx: number) {
     return `
 =================
-File #${idx} (${file.originalFileName}) 
+File #${idx} (${file.originalFileName})
 Direct Link: https://${file.serverShard?.domain}/${file.fileKey}
 UI address: ${env.get('COORDINATOR_UI')}/s/${UUIDService.encode(file.id)}
 
@@ -67,14 +67,14 @@ UI address: ${env.get('COORDINATOR_UI')}/s/${UUIDService.encode(file.id)}
 
     const file = request.files('file')
     const userId = request.header('X-User-Id')
-    const { parentDirectoryId, isPrivate, chunked: _chunked } = request.qs()
+    const { parentDirectoryId, isPrivate } = request.qs()
     let validate: ChunkedMeta | null = null
     // validate from qs
     try {
       validate = await request.validateUsing(chunkedMetaValidator)
 
       if (validate) {
-        console.log(`Request is a chunked upload.`)
+ 
         // also validate that we should have exactly
         // ONE file.
         if (file.length !== 1) {
@@ -89,7 +89,7 @@ UI address: ${env.get('COORDINATOR_UI')}/s/${UUIDService.encode(file.id)}
     } catch (e) {
       console.log(`Request is not a chunked upload or a malformed one.`)
     }
- 
+
     if (!file || file.length === 0) {
       return response.badRequest(createFailure('No file provided', 'no-file'))
     }
@@ -105,5 +105,44 @@ UI address: ${env.get('COORDINATOR_UI')}/s/${UUIDService.encode(file.id)}
     )
 
     return response.ok(createSuccess(uploadedFiles, 'Success uploading', 'success'))
+  }
+
+  async finishChunkedUpload({ request, response }: HttpContext) {
+    const userId = request.header('X-User-Id')
+    const { parentDirectoryId, isPrivate } = request.qs()
+
+    const { uploadId, totalChunks, fileName, fileSize, mimeType } =
+      await request.validateUsing(chunkedFinishValidator)
+
+    const file = await UploadService.finishChunkedUpload({
+      uploadId,
+      totalChunks,
+      fileName,
+      fileSize,
+      mimeType,
+      belongsToUser: userId ?? null,
+      isPrivate,
+      parentDirectoryId,
+    })
+
+    return response.ok(createSuccess(file, 'File assembled successfully', 'success'))
+  }
+
+  async finishChunkedUploadAnonymous({ request, response }: HttpContext) {
+    const { uploadId, totalChunks, fileName, fileSize, mimeType } =
+      await request.validateUsing(chunkedFinishValidator)
+
+    const file = await UploadService.finishChunkedUpload({
+      uploadId,
+      totalChunks,
+      fileName,
+      fileSize,
+      mimeType,
+      belongsToUser: null,
+      isPrivate: false,
+      parentDirectoryId: null,
+    })
+
+    return response.ok(createSuccess(file, 'File assembled successfully', 'success'))
   }
 }
