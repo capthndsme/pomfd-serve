@@ -23,7 +23,7 @@ export default class S2SauthMiddleware {
     }
     await MainServerAuthService.authenticateOtherServers(
       userId,
-      token.split(" ")[1]
+      token
     )
 
     const output = await next()
