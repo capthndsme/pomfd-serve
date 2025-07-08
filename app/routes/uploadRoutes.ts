@@ -17,8 +17,9 @@ function uploadRoutes(router: HttpRouterService) {
     .middleware(middleware.mainServerAuth())
 
   router.post('/s2s/metadata-patch', [UploadsController,'createFileMeta'])
+  .middleware(middleware.s2Sauth())
   router.post('/s2s/preview-create', [UploadsController,'createPreview'])
- 
+   .middleware(middleware.s2Sauth())
 
 }
 

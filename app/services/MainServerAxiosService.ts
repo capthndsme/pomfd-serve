@@ -20,7 +20,7 @@ class MainServerAxiosService {
 
   
   get get() {
-    return this.#axios.get;
+  return this.#axios.get;
   }
 
   get post() {
