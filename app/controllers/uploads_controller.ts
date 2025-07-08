@@ -167,7 +167,7 @@ UI address: ${env.get('COORDINATOR_UI')}/s/${UUIDService.encode(file.id)}
 
  
 
-    const res = await UploadService.createPreview(fileItem, file, quality)
+    const res = await UploadService.createPreview( typeof fileItem === "string"  ? JSON.parse(fileItem) : fileItem, file, quality)
 
     return response.ok(res)
   }
@@ -183,7 +183,7 @@ UI address: ${env.get('COORDINATOR_UI')}/s/${UUIDService.encode(file.id)}
 
  
 
-    const res = await UploadService.createFileMeta(fileItem, file)
+    const res = await UploadService.createFileMeta(typeof fileItem === "string"  ? JSON.parse(fileItem) : fileItem, file)
 
     return response.ok(res)
   }
