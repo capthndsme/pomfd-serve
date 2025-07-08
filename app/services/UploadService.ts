@@ -226,7 +226,7 @@ class UploadService {
    * keys of all others, so we are calling into the coordinator to ask first.
    */
   async createPreview(filePtr: FileItem, file: MultipartFile, quality: '480' | '720' | '1080') {
-    if (!filePtr.fileKey || !filePtr.isPrivate) {
+    if (!filePtr.fileKey ) {
       throw new NamedError('No file provided', 'no-file')
     }
     const bucket = filePtr.isPrivate ? 'private' : 'public'
@@ -255,7 +255,7 @@ class UploadService {
   }
 
   async createFileMeta(filePtr: FileItem, preview: MultipartFile) {
-    if (!filePtr.fileKey || !filePtr.isPrivate) {
+    if (!filePtr.fileKey) {
       throw new NamedError('No file provided', 'no-file')
     }
     const bucket = filePtr.isPrivate ? 'private' : 'public'
