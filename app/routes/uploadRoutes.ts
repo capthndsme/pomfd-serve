@@ -16,6 +16,10 @@ function uploadRoutes(router: HttpRouterService) {
   router.post('/upload/chunked/finish', [UploadsController, 'finishChunkedUpload'])
     .middleware(middleware.mainServerAuth())
 
+  router.post('/s2s/metadata-patch', [UploadsController,'createFileMeta'])
+  router.post('/s2s/preview-create', [UploadsController,'createPreview'])
+ 
+
 }
 
 export { uploadRoutes }

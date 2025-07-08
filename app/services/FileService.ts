@@ -51,6 +51,8 @@ class FileService {
     const data = `${filePath}|${expires}` // Use a separator that's not allowed in file paths
     return crypto.createHmac('sha256', this.#secret).update(data).digest('hex')
   }
+
+  
 }
 
 export default new FileService()

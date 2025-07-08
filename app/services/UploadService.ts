@@ -77,7 +77,6 @@ class UploadService {
     chunk: MultipartFile,
     meta: ChunkedMeta
   ) {
-
     const { uploadId, chunkIndex, totalChunks, fileSize } = meta
 
     // uploadId should only ever be alphanumeric
@@ -99,7 +98,7 @@ class UploadService {
     if (chunk.size !== meta.chunkSize) {
       throw new NamedError('Chunk size mismatch', 'einval')
     }
- 
+
     // async hashing for verification
 
     const bucketBase = '_chunks_'
@@ -113,7 +112,6 @@ class UploadService {
       name: `${chunkIndex}.chunk`,
       overwrite: true,
     })
- 
 
     return createSuccess(null, 'chunk ok', 'chunk-finish')
   }
@@ -217,8 +215,74 @@ class UploadService {
       )
       uploadedFile && !('data' in uploadedFile) && uploadedFiles.push(uploadedFile)
     }
-    if (chunkedMeta) return  'chunk-finish'
+    if (chunkedMeta) return 'chunk-finish'
     return uploadedFiles
+  }
+
+  /**
+   * Creates previews for a particular key, (FilePreview not FileMeta)
+   * so we should remove the filename from it.
+   * Only other servers can post from it, but we shouldn't know
+   * keys of all others, so we are calling into the coordinator to ask first.
+   */
+  async createPreview(filePtr: FileItem, file: MultipartFile, quality: '480' | '720' | '1080') {
+    if (!filePtr.fileKey || !filePtr.isPrivate) {
+      throw new NamedError('No file provided', 'no-file')
+    }
+    const bucket = filePtr.isPrivate ? 'private' : 'public'
+    const fileKey = filePtr.fileKey
+    // extract directory from fileKey (dir/file)
+    const directory = fileKey.substring(0, fileKey.lastIndexOf('/'))
+    const targetDir = join(this.#storageDir, bucket, directory)
+
+    await mkdir(targetDir, { recursive: true })
+
+    await file.move(targetDir, {
+      name: file.clientName,
+      overwrite: true,
+    })
+
+    // notify coordinator
+    const res = await MainServerAxiosService.post(`/coordinator/v1/ack-preview`, {
+      filePtr,
+      previewKey: `${directory}/${file.clientName}`,
+      quality: quality,
+    })
+    if (res.status === 200) {
+      return createSuccess(null, 'Preview uploaded', 'success')
+    }
+    throw new NamedError('Coordinator down', 'error')
+  }
+
+  async createFileMeta(filePtr: FileItem, preview: MultipartFile) {
+    if (!filePtr.fileKey || !filePtr.isPrivate) {
+      throw new NamedError('No file provided', 'no-file')
+    }
+    const bucket = filePtr.isPrivate ? 'private' : 'public'
+    const fileKey = filePtr.fileKey
+    // extract directory from fileKey (dir/file)
+    const directory = fileKey.substring(0, fileKey.lastIndexOf('/'))
+    const targetDir = join(this.#storageDir, bucket, directory)
+
+    await mkdir(targetDir, { recursive: true })
+
+    const targetFileName =  preview.clientName +
+        '_Thumb.' +
+        (preview.extname ?? preview.clientName.split('.').pop() ?? 'jpg')
+    await preview.move(targetDir, {
+      name: targetFileName,
+      overwrite: true,
+    })
+
+ 
+    const res = await MainServerAxiosService.post(`/coordinator/v1/ack-meta`, {
+      ...filePtr,
+      fileThumbName: targetFileName,
+    })
+    if (res.status === 200) {
+      return createSuccess(null, 'Meta uploaded', 'success')
+    }
+    throw new NamedError('Coordinator down', 'error')
   }
 }
 

@@ -152,4 +152,40 @@ UI address: ${env.get('COORDINATOR_UI')}/s/${UUIDService.encode(file.id)}
 
     return response.ok(createSuccess(file, 'File assembled successfully', 'success'))
   }
+
+
+  /** Metadata uploads, server-to-server */
+  async createPreview({ request, response }: HttpContext) {
+    const file = request.file('file')
+
+    const {fileItem,quality} = request.body()
+
+    if (!file  || !quality || !fileItem) {
+      return response.badRequest(createFailure('Missing file, fileId, or quality', 'einval'))
+    }
+ 
+
+ 
+
+    const res = await UploadService.createPreview(fileItem, file, quality)
+
+    return response.ok(res)
+  }
+
+  async createFileMeta({ request, response }: HttpContext) {
+    const file = request.file('file')
+    const {fileItem} = request.body()
+
+
+    if (!file || !fileItem) {
+      return response.badRequest(createFailure('Missing file or fileId', 'einval'))
+    }
+
+ 
+
+    const res = await UploadService.createFileMeta(fileItem, file)
+
+    return response.ok(res)
+  }
+  
 }
