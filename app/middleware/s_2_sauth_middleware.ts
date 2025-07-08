@@ -15,13 +15,13 @@ export default class S2SauthMiddleware {
      */
 
 
-    const userId = ctx.request.header('X-server-id')
+    const userId = ctx.request.header('x-server-id')
     const token = ctx.request.header('x-api-key')
 
     if (!userId || !token) {
       throw new NamedError('Invalid API Key', 'server-key-not-found')
     }
-    await MainServerAuthService.authenticateUserToken(
+    await MainServerAuthService.authenticateOtherServers(
       userId,
       token.split(" ")[1]
     )
