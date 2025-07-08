@@ -230,7 +230,7 @@ class UploadService {
       throw new NamedError('No file provided', 'no-file')
     }
     const bucket = filePtr.isPrivate ? 'private' : 'public'
-    const fileKey = filePtr.fileKey
+    const fileKey = filePtr.fileKey.split('/')[0]
     // extract directory from fileKey (dir/file)
     const directory = fileKey.substring(0, fileKey.lastIndexOf('/'))
     const targetDir = join(this.#storageDir, bucket, directory)
@@ -259,7 +259,7 @@ class UploadService {
       throw new NamedError('No file provided', 'no-file')
     }
     const bucket = filePtr.isPrivate ? 'private' : 'public'
-    const fileKey = filePtr.fileKey
+    const fileKey = filePtr.fileKey.split('/')[0]
     // extract directory from fileKey (dir/file)
     const directory = fileKey.substring(0, fileKey.lastIndexOf('/'))
     const targetDir = join(this.#storageDir, bucket, directory)
