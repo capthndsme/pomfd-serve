@@ -2,7 +2,16 @@ import env from '#start/env'
 import crypto from 'node:crypto'
 
 class FileService {
-  readonly #secret = env.get('APP_KEY')
+  /**
+   * Presigned URL secret.
+   *
+   * IMPORTANT: This must match what the coordinator (`cap-cloud`) uses when generating
+   * presigned URLs for this shard. The coordinator signs with `serverShard.apiKey`,
+   * which corresponds to this shard's `COORDINATOR_API_KEY`.
+   *
+   * Do NOT use APP_KEY here (that's the Adonis app secret and will not match the shard key).
+   */
+  readonly #secret = env.get('COORDINATOR_API_KEY')
   // Use an environment variable for the base URL
   readonly #baseUrl = env.get('APP_URL', 'http://localhost:3333')
 
