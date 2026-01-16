@@ -9,12 +9,12 @@ import { chunkedFinishValidator } from '#validators/chunked_finish_validator'
 import { ChunkedMeta } from '../../shared/types/request/ChunkedMeta.js'
 
 export default class UploadsController {
- 
+
   async uploadFileAnonymous({ request, response }: HttpContext) {
- 
+
 
     const file = request.files('file')
- 
+
     let validate: ChunkedMeta | null = null
     // validate from qs
     try {
@@ -40,16 +40,16 @@ export default class UploadsController {
       return response.badRequest(createFailure('No file provided', 'no-file'))
     }
 
- 
+
 
     const uploadedFile = await UploadService.uploadMultiFile(file, null, false, null, validate)
- 
+
 
     // detect if we are CURL
     if (request.header('User-Agent')?.includes('curl') && typeof uploadedFile !== 'string') {
       return response.ok(
         `Success uploading.` +
-          uploadedFile.map((file, idx) => this.generateCurlText(file, idx)).join('')
+        uploadedFile.map((file, idx) => this.generateCurlText(file, idx)).join('')
       )
     }
     if (uploadedFile === 'chunk-finish') return createSuccess(null, 'chunk-finish', 'chunk-finish')
@@ -74,6 +74,7 @@ UI address: ${env.get('COORDINATOR_UI')}/s/${UUIDService.encode(file.id)}
     const file = request.files('file')
     const userId = request.header('X-User-Id')
     const { parentDirectoryId, isPrivate } = request.qs()
+    const isPrivateBool = isPrivate === 'true' || isPrivate === '1' || isPrivate === true
     let validate: ChunkedMeta | null = null
     // validate from qs
     try {
@@ -104,7 +105,7 @@ UI address: ${env.get('COORDINATOR_UI')}/s/${UUIDService.encode(file.id)}
     const uploadedFiles = await UploadService.uploadMultiFile(
       file,
       userId,
-      isPrivate,
+      isPrivateBool,
       parentDirectoryId,
       validate
     )
@@ -117,6 +118,7 @@ UI address: ${env.get('COORDINATOR_UI')}/s/${UUIDService.encode(file.id)}
   async finishChunkedUpload({ request, response }: HttpContext) {
     const userId = request.header('X-User-Id')
     const { parentDirectoryId, isPrivate } = request.qs()
+    const isPrivateBool = isPrivate === 'true' || isPrivate === '1' || isPrivate === true
 
     const { uploadId, totalChunks, fileName, fileSize, mimeType } =
       await request.validateUsing(chunkedFinishValidator)
@@ -128,7 +130,7 @@ UI address: ${env.get('COORDINATOR_UI')}/s/${UUIDService.encode(file.id)}
       fileSize,
       mimeType,
       belongsToUser: userId ?? null,
-      isPrivate,
+      isPrivate: isPrivateBool,
       parentDirectoryId,
     })
 
@@ -158,34 +160,34 @@ UI address: ${env.get('COORDINATOR_UI')}/s/${UUIDService.encode(file.id)}
   async createPreview({ request, response }: HttpContext) {
     const file = request.file('file')
 
-    const {fileItem,quality} = request.body()
+    const { fileItem, quality } = request.body()
 
-    if (!file  || !quality || !fileItem) {
+    if (!file || !quality || !fileItem) {
       return response.badRequest(createFailure('Missing file, fileId, or quality', 'einval'))
     }
- 
 
- 
 
-    const res = await UploadService.createPreview( typeof fileItem === "string"  ? JSON.parse(fileItem) : fileItem, file, quality)
+
+
+    const res = await UploadService.createPreview(typeof fileItem === "string" ? JSON.parse(fileItem) : fileItem, file, quality)
 
     return response.ok(res)
   }
 
   async createFileMeta({ request, response }: HttpContext) {
     const file = request.file('file')
-    const {fileItem} = request.body()
+    const { fileItem } = request.body()
 
 
     if (!file || !fileItem) {
       return response.badRequest(createFailure('Missing file or fileId', 'einval'))
     }
 
- 
 
-    const res = await UploadService.createFileMeta(typeof fileItem === "string"  ? JSON.parse(fileItem) : fileItem, file)
+
+    const res = await UploadService.createFileMeta(typeof fileItem === "string" ? JSON.parse(fileItem) : fileItem, file)
 
     return response.ok(res)
   }
-  
+
 }
